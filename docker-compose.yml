@@ -1,0 +1,41 @@
+version: "3"
+services:
+  kafka:
+    image: wurstmeister/kafka:2.12-2.1.1
+    restart: on-failure:3
+    links:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    env_file:
+      - ./env-test
+    networks:
+      - default
+  streamer:
+    image: kafka-go-streamer
+    build:
+      context: .
+      dockerfile: docker/kafka-go-streamer/Dockerfile
+    env_file:
+      - ./env-test
+    depends_on:
+      - kafka
+      - zookeeper
+    networks:
+      - default
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - default
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - default
+
+networks:
+  default:

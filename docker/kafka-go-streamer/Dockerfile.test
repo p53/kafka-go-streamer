@@ -1,0 +1,24 @@
+FROM golang:1.12-alpine3.9
+
+WORKDIR /go/src/gitlab.tools.in.pan-net.eu/security/kafka-go-streamer
+ENV GOPATH=/go
+
+RUN set -ex \
+    && apk add --no-cache --virtual .build-deps \
+            git \
+            gcc \
+            g++ \
+            make \
+            libc-dev \
+            musl-dev \
+            linux-headers \
+            curl
+RUN curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+COPY . /go/src/gitlab.tools.in.pan-net.eu/security/kafka-go-streamer
+
+RUN dep ensure
+
+COPY ./docker/kafka-go-streamer/wait-for-kafka.sh /opt
+RUN chmod u+x /opt/wait-for-kafka.sh
+
+CMD ["/opt/wait-for-kafka.sh", "/usr/local/go/bin/go", "test", "-v", "./..."]

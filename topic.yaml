@@ -1,0 +1,71 @@
+#
+---
+extractors:
+  hosts_10_220_64_0_21: &hosts_10_220_64_0_21
+    pattern: '.*"source":"10\.220\.(6[4-9]|7[0-1])\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])".*' # CIDR 10.220.64.0/21
+    use_regex: true
+  os_syslog: &os_syslog
+    pattern: 'source":"/var/log/syslog'
+  os_ceph_ceph: &os_ceph_ceph
+    pattern: 'source":"/var/log/ceph/ceph.log'
+  os_ceph_mon: &os_ceph_mon
+    pattern: 'source":"/var/log/ceph/ceph-mon'
+  os_ceph_osd: &os_ceph_osd
+    pattern: 'source":"/var/log/ceph/ceph-osd' # added 2019_04_26
+
+spliters_templates:
+  - input_topic: 'sc-hrzagt1-rsyslog-proxy'
+    actions:
+      unmatched: 'sc-hrzagt1-rsyslog-proxy-unmatched'
+      debug: 'sc-hrzagt1-rsyslog-proxy-debug'
+    cloud: [sc-hrzagt1]
+    splits:
+      - extractor: *hosts_10_220_64_0_21
+        output_topic: 'all-office-infra-match'
+    test_messages:
+      - message: 'sasdjioa"source":"10.220.64.10"saskld;jas'
+        expected_topic: all-office-infra-match
+      - message: sadjasdasd
+        expected_topic: sc-hrzagt1-rsyslog-proxy-unmatched
+  - input_topic: 'zagr-ic-openstack'
+    actions:
+      matched: 'ic-hrzagt1-openstack-match'
+      unmatched: 'ic-hrzagt1-openstack-unmatched'
+      drop: 'ic-hrzagt1-openstack-drop'
+      debug: 'ic-hrzagt1-openstack-debug'
+    cloud: [sc-hubudb1]
+    splits:
+      - extractor: *os_syslog
+        output_topic: 'sc-hubudb1-forti-match'
+      - extractor: *os_ceph_mon
+        action: debug
+      - extractor: *os_ceph_ceph
+      - extractor: *os_ceph_osd
+        action: drop
+    test_messages:
+      - message: 'ewewerewrewrsource":"/var/log/syslogeee'
+        expected_topic: sc-hubudb1-forti-match
+      - message: 'uuuuwwwwsource":"/var/log/ceph/ceph-monowowowowo'
+        expected_topic: ic-hrzagt1-openstack-debug
+      - message: 'KavaklWsource":"/var/log/ceph/ceph.logweWIx'
+        expected_topic: ic-hrzagt1-openstack-match
+      - message: sadjasdasd
+        expected_topic: ic-hrzagt1-openstack-unmatched
+      - message: 'source":"/var/log/ceph/ceph-osd'
+        expected_topic: ic-hrzagt1-openstack-drop
+
+################################################################################
+### ic-hubudb1-syslog ### added 2019_07_12 #####################################
+################################################################################
+  - input_topic: 'ic-hubudb1-syslog'
+    actions:
+      matched: 'ic-hubudb1-openstack-match'
+      unmatched: 'ic-hubudb1-openstack-unmatched'
+      drop: 'ic-hubudb1-openstack-drop'
+      debug: 'ic-hubudb1-openstack-debug'
+    cloud: [sc-hubudb1]
+    splits:
+      - extractor: *os_syslog
+      - extractor: *os_ceph_mon
+      - extractor: *os_ceph_ceph
+      - extractor: *os_ceph_osd
