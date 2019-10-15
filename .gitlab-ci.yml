@@ -37,7 +37,7 @@ build_push_docker_image_tagged:
     - docker-compose -f docker-compose.yml build
     - export
     - docker login -u ${ARTIFACTORY_LOGIN} -p ${ARTIFACTORY_TOKEN} https://${ARTIFACTORY_URL}
-    - docker tag kafka-go-streamer:latest  ${ARTIFACTORY_URL}/${ARTIFACTORY_REGISTRY}/${CI_PROJECT_NAME}:$CI_COMMIT_TAG
-    - docker push ${ARTIFACTORY_URL}/${ARTIFACTORY_REGISTRY}/${CI_PROJECT_NAME}:$CI_COMMIT_TAG
+    - docker tag kafka-go-streamer:latest  ${ARTIFACTORY_URL}/${ARTIFACTORY_REGISTRY}/docker-images/${CI_PROJECT_NAME}:$CI_COMMIT_TAG
+    - docker push ${ARTIFACTORY_URL}/${ARTIFACTORY_REGISTRY}/docker-images/${CI_PROJECT_NAME}:$CI_COMMIT_TAG
   only:
     - tags
