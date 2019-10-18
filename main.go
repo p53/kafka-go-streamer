@@ -291,7 +291,7 @@ func main() {
 	// )
 
 	done := make(chan bool)
-	errChannel := make(chan error, 1)
+	errChannel := make(chan error)
 
 	for _, spliter := range spliters.Spliters {
 		unmatchChannel := make(chan FlaggedMessage, 20)
@@ -379,7 +379,7 @@ func consume(assoc ReaderWriterAssociation, errChannel chan error) {
 	defer reader.Close()
 
 	for {
-		m, err := reader.FetchMessage(context.Background())
+		m, err := reader.ReadMessage(context.Background())
 
 		if err != nil {
 			errChannel <- Error{fmt.Sprintf("Error fetching message: %s", err)}
@@ -388,8 +388,6 @@ func consume(assoc ReaderWriterAssociation, errChannel chan error) {
 		for _, writeChannel := range assoc.WriterChannels {
 			writeChannel <- &m
 		}
-
-		reader.CommitMessages(context.Background(), m)
 	}
 }
 
@@ -517,7 +515,6 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 				candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = make([]bool, 0)
 				candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
 			}
-			candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
 		}
 
 		// logger.Debug(
