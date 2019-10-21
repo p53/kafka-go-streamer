@@ -296,7 +296,7 @@ func main() {
 	errChannel := make(chan error)
 
 	for _, spliter := range spliters.Spliters {
-		unmatchChannel := make(chan FlaggedMessage, 20)
+		unmatchChannel := make(chan FlaggedMessage, 50)
 		assoc := ReaderWriterAssociation{}
 
 		readerConfig := templateReaderConfig
@@ -316,7 +316,7 @@ func main() {
 
 		for _, split := range spliter.Splits {
 			split.InputTopic = spliter.InputTopic
-			writeChannel := make(chan *kafka.Message, 20)
+			writeChannel := make(chan *kafka.Message, 50)
 			assoc.WriterChannels = append(assoc.WriterChannels, writeChannel)
 
 			if split.OutputTopic == "" {
