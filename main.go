@@ -379,7 +379,7 @@ func consume(assoc ReaderWriterAssociation, errChannel chan error) {
 	defer reader.Close()
 
 	for {
-		m, err := reader.ReadMessage(context.Background())
+		m, err := reader.FetchMessage(context.Background())
 
 		if err != nil {
 			errChannel <- Error{fmt.Sprintf("Error fetching message: %s", err)}
@@ -388,6 +388,8 @@ func consume(assoc ReaderWriterAssociation, errChannel chan error) {
 		for _, writeChannel := range assoc.WriterChannels {
 			writeChannel <- &m
 		}
+
+		reader.CommitMessages(context.Background(), m)
 	}
 }
 
