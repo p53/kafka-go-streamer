@@ -296,7 +296,7 @@ func main() {
 	errChannel := make(chan error)
 
 	for _, spliter := range spliters.Spliters {
-		unmatchChannel := make(chan FlaggedMessage, 50)
+		unmatchChannel := make(chan FlaggedMessage, 20)
 		assoc := ReaderWriterAssociation{}
 
 		readerConfig := templateReaderConfig
@@ -316,7 +316,7 @@ func main() {
 
 		for _, split := range spliter.Splits {
 			split.InputTopic = spliter.InputTopic
-			writeChannel := make(chan *kafka.Message, 50)
+			writeChannel := make(chan *kafka.Message, 20)
 			assoc.WriterChannels = append(assoc.WriterChannels, writeChannel)
 
 			if split.OutputTopic == "" {
@@ -482,15 +482,11 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 	defer w.Close()
 
 	numSplits := len(spliter.Splits)
-	// candidatesUnmatched := make(map[int64]map[int][]bool)
 	candidatesAll := make(map[string][]bool)
 	var buffer bytes.Buffer
 
 	for {
 		m := <-unmatched
-		//msgName := fmt.Sprintf("%d-%d", m.KafkaMessage.Offset, m.KafkaMessage.Partition)
-		// numZeros := (int64)(math.Floor(math.Log(float64(m.KafkaMessage.Partition))/math.Log(10)) + 1)
-		// msgName := m.KafkaMessage.Offset*numZeros + int64(m.KafkaMessage.Partition)
 
 		buffer.WriteString(strconv.Itoa(int(m.KafkaMessage.Offset)))
 		buffer.WriteString("-")
@@ -505,17 +501,6 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 
 		candidatesAll[msgName] = append(candidatesAll[msgName], m.Matched)
 
-		//
-		// if m.Matched == false {
-		// 	if _, ok := candidatesUnmatched[m.KafkaMessage.Offset]; ok {
-		// 		candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
-		// 	} else {
-		// 		candidatesUnmatched[m.KafkaMessage.Offset] = make(map[int][]bool, 0)
-		// 		candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = make([]bool, 0)
-		// 		candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
-		// 	}
-		// }
-
 		// logger.Debug(
 		// 	"Number of splits:",
 		// 	zap.Any("Splits", len(spliter.Splits)),
@@ -523,7 +508,7 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 		//
 		// logger.Debug(
 		// 	"Number of not matchet already:",
-		// 	zap.Int("Splits", len(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition])),
+		// 	zap.Int("Splits", len(candidatesAll[msgName])),
 		// )
 
 		if numSplits == len(candidatesAll[msgName]) {
