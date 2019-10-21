@@ -480,7 +480,7 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 	defer w.Close()
 
 	numSplits := len(spliter.Splits)
-	candidatesUnmatched := make(map[int64]map[int][]bool)
+	// candidatesUnmatched := make(map[int64]map[int][]bool)
 	candidatesAll := make(map[int64]map[int][]bool)
 	//var buffer bytes.Buffer
 
@@ -508,16 +508,16 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 			candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = make([]bool, 0)
 			candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
 		}
-
-		if m.Matched == false {
-			if _, ok := candidatesUnmatched[m.KafkaMessage.Offset]; ok {
-				candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
-			} else {
-				candidatesUnmatched[m.KafkaMessage.Offset] = make(map[int][]bool, 0)
-				candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = make([]bool, 0)
-				candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
-			}
-		}
+		//
+		// if m.Matched == false {
+		// 	if _, ok := candidatesUnmatched[m.KafkaMessage.Offset]; ok {
+		// 		candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
+		// 	} else {
+		// 		candidatesUnmatched[m.KafkaMessage.Offset] = make(map[int][]bool, 0)
+		// 		candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = make([]bool, 0)
+		// 		candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
+		// 	}
+		// }
 
 		// logger.Debug(
 		// 	"Number of splits:",
@@ -529,35 +529,32 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 		// 	zap.Int("Splits", len(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition])),
 		// )
 
-		if numSplits == len(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition]) {
-			// logger.Debug("Writing unmatched")
-			newMsg := kafka.Message{
-				Key:   m.KafkaMessage.Key,
-				Value: m.KafkaMessage.Value,
-			}
-
-			err := w.WriteMessages(context.Background(),
-				newMsg,
-			)
-
-			if err != nil {
-				errChannel <- Error{fmt.Sprintf("%s", err)}
-			}
-
-			delete(candidatesUnmatched[m.KafkaMessage.Offset], m.KafkaMessage.Partition)
-		}
-
-		if m.Matched == true {
-			delete(candidatesUnmatched[m.KafkaMessage.Offset], m.KafkaMessage.Partition)
-		}
-
 		if numSplits == len(candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition]) {
-			delete(candidatesUnmatched[m.KafkaMessage.Offset], m.KafkaMessage.Partition)
-			delete(candidatesAll[m.KafkaMessage.Offset], m.KafkaMessage.Partition)
+			nonMatched := 0
 
-			if len(candidatesUnmatched[m.KafkaMessage.Offset]) == 0 {
-				delete(candidatesUnmatched, m.KafkaMessage.Offset)
+			for _, matching := range candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition] {
+				if matching == false {
+					nonMatched++
+				}
 			}
+
+			if numSplits == nonMatched {
+				// logger.Debug("Writing unmatched")
+				newMsg := kafka.Message{
+					Key:   m.KafkaMessage.Key,
+					Value: m.KafkaMessage.Value,
+				}
+
+				err := w.WriteMessages(context.Background(),
+					newMsg,
+				)
+
+				if err != nil {
+					errChannel <- Error{fmt.Sprintf("%s", err)}
+				}
+			}
+
+			delete(candidatesAll[m.KafkaMessage.Offset], m.KafkaMessage.Partition)
 
 			if len(candidatesAll[m.KafkaMessage.Offset]) == 0 {
 				delete(candidatesAll, m.KafkaMessage.Offset)
