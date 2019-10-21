@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"flag"
@@ -10,6 +11,7 @@ import (
 	"os/signal"
 	"regexp"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -481,8 +483,8 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 
 	numSplits := len(spliter.Splits)
 	// candidatesUnmatched := make(map[int64]map[int][]bool)
-	candidatesAll := make(map[int64]map[int][]bool)
-	//var buffer bytes.Buffer
+	candidatesAll := make(map[string][]bool)
+	var buffer bytes.Buffer
 
 	for {
 		m := <-unmatched
@@ -490,24 +492,19 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 		// numZeros := (int64)(math.Floor(math.Log(float64(m.KafkaMessage.Partition))/math.Log(10)) + 1)
 		// msgName := m.KafkaMessage.Offset*numZeros + int64(m.KafkaMessage.Partition)
 
-		// buffer.WriteString(strconv.Itoa(int(m.KafkaMessage.Offset)))
-		// buffer.WriteString("-")
-		// buffer.WriteString(strconv.Itoa(int(m.KafkaMessage.Partition)))
-		// msgName := buffer.String()
-		// buffer.Reset()
+		buffer.WriteString(strconv.Itoa(int(m.KafkaMessage.Offset)))
+		buffer.WriteString("-")
+		buffer.WriteString(strconv.Itoa(int(m.KafkaMessage.Partition)))
+		msgName := buffer.String()
+		buffer.Reset()
 
 		// logger.Debug(
 		// 	"Dumping all unmatched before clean:",
 		// 	zap.Any("Unmatched", candidatesUnmatched),
 		// )
 
-		if _, ok := candidatesAll[m.KafkaMessage.Offset]; ok {
-			candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
-		} else {
-			candidatesAll[m.KafkaMessage.Offset] = make(map[int][]bool, 0)
-			candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = make([]bool, 0)
-			candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition] = append(candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition], m.Matched)
-		}
+		candidatesAll[msgName] = append(candidatesAll[msgName], m.Matched)
+
 		//
 		// if m.Matched == false {
 		// 	if _, ok := candidatesUnmatched[m.KafkaMessage.Offset]; ok {
@@ -529,10 +526,10 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 		// 	zap.Int("Splits", len(candidatesUnmatched[m.KafkaMessage.Offset][m.KafkaMessage.Partition])),
 		// )
 
-		if numSplits == len(candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition]) {
+		if numSplits == len(candidatesAll[msgName]) {
 			nonMatched := 0
 
-			for _, matching := range candidatesAll[m.KafkaMessage.Offset][m.KafkaMessage.Partition] {
+			for _, matching := range candidatesAll[msgName] {
 				if matching == false {
 					nonMatched++
 				}
@@ -554,11 +551,7 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 				}
 			}
 
-			delete(candidatesAll[m.KafkaMessage.Offset], m.KafkaMessage.Partition)
-
-			if len(candidatesAll[m.KafkaMessage.Offset]) == 0 {
-				delete(candidatesAll, m.KafkaMessage.Offset)
-			}
+			delete(candidatesAll, msgName)
 		}
 
 		// logger.Debug(
