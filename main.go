@@ -409,10 +409,6 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, writerConfig *kaf
 	var regex *regexp.Regexp
 	useRegex := split.Extractor.UseRegex
 
-	if pattern == "" {
-		errChannel <- Error{fmt.Sprintf("Empty pattern for output topic %s!", split.OutputTopic)}
-	}
-
 	if split.Extractor.UseRegex {
 		reg, err := regexp.Compile(pattern)
 		regex = reg
