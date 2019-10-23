@@ -161,6 +161,7 @@ func main() {
 	loggerBasic.Println("Starting streamer...")
 
 	groupPrefix := ""
+	groupSuffix := ""
 	templateReaderConfig := ReaderConfig{}
 	templateWriterConfig := WriterConfig{}
 	certificates := make([]tls.Certificate, 1)
@@ -171,6 +172,7 @@ func main() {
 
 	splitConf := os.Getenv("SPLIT_CONF")
 	groupPrefix = os.Getenv("GROUP_PREFIX")
+	groupSuffix = os.Getenv("GROUP_SUFFIX")
 	sslSkipVerify := true
 	useSSL := os.Getenv("SSL")
 	sslPrivateKeyEncoded := os.Getenv("SSL_PRIVATE_KEY")
@@ -207,6 +209,14 @@ func main() {
 			logger.Fatal(
 				"Maximal length of GROUP_PREFIX should be 64, now is",
 				zap.Int("GROUP_PREFIX_LENGTH", grpPrefixLength))
+		}
+	}
+
+	if groupSuffix != "" {
+		if grpSuffixLength := len(groupSuffix); grpSuffixLength > 64 {
+			logger.Fatal(
+				"Maximal length of GROUP_SUFFIX should be 64, now is",
+				zap.Int("GROUP_SUFFIX_LENGTH", grpSuffixLength))
 		}
 	}
 
@@ -301,7 +311,7 @@ func main() {
 
 		readerConfig := templateReaderConfig
 		readerConfig.Topic = spliter.InputTopic
-		readerConfig.GroupID = fmt.Sprintf("%s-%s", groupPrefix, spliter.InputTopic)
+		readerConfig.GroupID = fmt.Sprintf("%s-streamer-%s", groupPrefix, groupSuffix)
 		readerConfig.Dialer = dialer
 		readerConfig.ErrorLogger = loggerBasic
 		readerKafkaConfig := &kafka.ReaderConfig{}
