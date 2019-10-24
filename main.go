@@ -402,6 +402,10 @@ func consume(assoc ReaderWriterAssociation, errChannel chan error) {
 		}
 
 		reader.CommitMessages(context.Background(), m)
+
+		if err != nil {
+			errChannel <- Error{fmt.Sprintf("Error commiting message: %s", err)}
+		}
 	}
 }
 
