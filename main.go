@@ -166,7 +166,7 @@ func main() {
 	templateWriterConfig := WriterConfig{}
 	certificates := make([]tls.Certificate, 1)
 	dialer := &kafka.Dialer{
-		Timeout:   10 * time.Second,
+		Timeout:   60 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
 
