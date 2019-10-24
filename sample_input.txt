@@ -6,7 +6,7 @@ IlfBbygEiLNXHyJhTLW
 faZqZUGDgnQabA5UdYZ
 RTWAVOaVyawEWy6CsyA
 qEdHwRCP3FSYokcFvoc
-/var/log/ceph/ceph.logweWIx
+source":"/var/log/ceph/ceph.logweWIx
 PGItCtP031vLDgLC1xV
 0lZFCAVzDmQ6Z0lJp5D
 wIQaGl88A30aUwDk3UR
@@ -19,7 +19,7 @@ lGGh83VIzw17TkXbe36
 edGiyxDSYq93dS6X8yI
 dOWubEGgxF3iaVdf395
 hgOJWek5wqZgmIAaUvj
-/var/log/ceph/ceph.logweWIx
+source":"/var/log/ceph/ceph.logweWIx
 5olQqu8TaRrroqtBBFO
 nOYBSkrzxLAV7iukVnV
 EtV4uaQphvJzGCdqBmV
@@ -67,7 +67,7 @@ PlijH2R4dGkcPbCHmnQ
 jKaENqxwMWPZmcYFQsN
 nOwTWk87ahTqw7c0scV
 yH1Lv1C7tMJJRrHIAud
-/var/log/ceph/ceph-monowowowowo
+source":"/var/log/ceph/ceph-monowowowowo
 WNwfMa1amY7memseDHi
 CwmfbZrkFy2alFoZkch
 Qp32H1PO8IDnt14WzqO

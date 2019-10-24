@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"flag"
@@ -11,7 +10,6 @@ import (
 	"os/signal"
 	"regexp"
 	"runtime/pprof"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -163,7 +161,7 @@ func main() {
 	groupPrefix := ""
 	groupSuffix := ""
 	templateReaderConfig := ReaderConfig{}
-	templateWriterConfig := WriterConfig{}
+
 	certificates := make([]tls.Certificate, 1)
 	dialer := &kafka.Dialer{
 		Timeout:   60 * time.Second,
@@ -193,12 +191,6 @@ func main() {
 	}
 
 	err := envconfig.Process("pannet-kafka-streamer", &templateReaderConfig)
-
-	if err != nil {
-		logger.Fatal(err.Error())
-	}
-
-	err = envconfig.Process("pannet-kafka-streamer", &templateWriterConfig)
 
 	if err != nil {
 		logger.Fatal(err.Error())
@@ -306,9 +298,6 @@ func main() {
 	errChannel := make(chan error)
 
 	for _, spliter := range spliters.Spliters {
-		unmatchChannel := make(chan FlaggedMessage, 20)
-		assoc := ReaderWriterAssociation{}
-
 		readerConfig := templateReaderConfig
 		readerConfig.Topic = spliter.InputTopic
 		readerConfig.GroupID = fmt.Sprintf("%s-streamer-%s", groupPrefix, groupSuffix)
@@ -321,60 +310,10 @@ func main() {
 			readerKafkaConfig.Logger = loggerBasic
 		}
 
-		assoc.ReaderConfig = *readerKafkaConfig
-		assoc.WriterChannels = make([]chan *kafka.Message, 0)
+		writeChannel := make(chan *kafka.Message, 20)
 
-		for _, split := range spliter.Splits {
-			split.InputTopic = spliter.InputTopic
-			writeChannel := make(chan *kafka.Message, 20)
-			assoc.WriterChannels = append(assoc.WriterChannels, writeChannel)
-
-			if split.OutputTopic == "" {
-				if split.Action == "" {
-					split.OutputTopic = spliter.Actions["matched"]
-				} else {
-					split.OutputTopic = spliter.Actions[split.Action]
-				}
-			}
-
-			writerConfig := templateWriterConfig
-			writerConfig.Topic = split.OutputTopic
-			writerConfig.Dialer = dialer
-			writerConfig.ErrorLogger = loggerBasic
-
-			writerKafkaConfig := &kafka.WriterConfig{}
-
-			copier.Copy(writerKafkaConfig, &writerConfig)
-
-			if debug == "true" {
-				writerKafkaConfig.Logger = loggerBasic
-			}
-
-			go produce(done, writeChannel, writerKafkaConfig, split, unmatchChannel, errChannel)
-		}
-
-		go consume(assoc, errChannel)
-
-		if topicName, ok := spliter.Actions["unmatched"]; ok {
-			writerConfig := templateWriterConfig
-			writerConfig.Topic = topicName
-			writerConfig.Dialer = dialer
-			writerConfig.ErrorLogger = loggerBasic
-
-			// logger.Debug(
-			// 	"Output unmatch topic",
-			// 	zap.String("Unmatch", topicName),
-			// )
-
-			writerKafkaConfig := &kafka.WriterConfig{}
-			copier.Copy(writerKafkaConfig, &writerConfig)
-
-			if debug == "true" {
-				writerKafkaConfig.Logger = loggerBasic
-			}
-
-			go unmatched(unmatchChannel, writerKafkaConfig, spliter, errChannel)
-		}
+		go produce(done, writeChannel, dialer, spliter, errChannel)
+		go consume(readerKafkaConfig, writeChannel, errChannel)
 	}
 
 	select {
@@ -386,8 +325,8 @@ func main() {
 	}
 }
 
-func consume(assoc ReaderWriterAssociation, errChannel chan error) {
-	reader := kafka.NewReader(assoc.ReaderConfig)
+func consume(readerKafkaConfig *kafka.ReaderConfig, writeChannel chan *kafka.Message, errChannel chan error) {
+	reader := kafka.NewReader(*readerKafkaConfig)
 	defer reader.Close()
 
 	for {
@@ -397,9 +336,7 @@ func consume(assoc ReaderWriterAssociation, errChannel chan error) {
 			errChannel <- Error{fmt.Sprintf("Error fetching message: %s", err)}
 		}
 
-		for _, writeChannel := range assoc.WriterChannels {
-			writeChannel <- &m
-		}
+		writeChannel <- &m
 
 		reader.CommitMessages(context.Background(), m)
 
@@ -409,135 +346,139 @@ func consume(assoc ReaderWriterAssociation, errChannel chan error) {
 	}
 }
 
-func produce(done chan bool, inputMsgChan chan *kafka.Message, writerConfig *kafka.WriterConfig, split Split, unmatched chan FlaggedMessage, errChannel chan error) {
+func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dialer, spliter Spliter, errChannel chan error) {
 	// logger.Debug(
 	// 	"Starting producer thread for",
 	// 	zap.String("pattern", split.Extractor.Pattern),
 	// )
+	loggerBasic := GetLogger()
+	writers := make([]*kafka.Writer, 0)
+	regexes := make([]*regexp.Regexp, 0)
+	var unmatchedWriter *kafka.Writer
 
-	w := kafka.NewWriter(*writerConfig)
+	templateWriterConfig := WriterConfig{}
+	err := envconfig.Process("pannet-kafka-streamer", &templateWriterConfig)
 
-	defer w.Close()
+	if err != nil {
+		logger.Fatal(err.Error())
+	}
 
-	pattern := split.Extractor.Pattern
-	var regex *regexp.Regexp
-	useRegex := split.Extractor.UseRegex
+	for _, split := range spliter.Splits {
+		split.InputTopic = spliter.InputTopic
 
-	if split.Extractor.UseRegex {
-		reg, err := regexp.Compile(pattern)
-		regex = reg
-		if err != nil {
-			errChannel <- Error{fmt.Sprintf("Failure compiling pattern %s", pattern)}
+		if split.OutputTopic == "" {
+			if split.Action == "" {
+				split.OutputTopic = spliter.Actions["matched"]
+			} else {
+				split.OutputTopic = spliter.Actions[split.Action]
+			}
 		}
+
+		writerConfig := templateWriterConfig
+		writerConfig.Topic = split.OutputTopic
+		writerConfig.Dialer = dialer
+		writerConfig.ErrorLogger = loggerBasic
+
+		writerKafkaConfig := &kafka.WriterConfig{}
+
+		copier.Copy(writerKafkaConfig, &writerConfig)
+
+		if debug := os.Getenv("DEBUG"); debug == "true" {
+			writerKafkaConfig.Logger = loggerBasic
+		}
+
+		w := kafka.NewWriter(*writerKafkaConfig)
+		defer w.Close()
+		var reg *regexp.Regexp
+
+		if split.Extractor.UseRegex {
+			pattern := split.Extractor.Pattern
+			reg, err = regexp.Compile(pattern)
+			if err != nil {
+				errChannel <- Error{fmt.Sprintf("Failure compiling pattern %s", pattern)}
+			}
+		}
+
+		writers = append(writers, w)
+		regexes = append(regexes, reg)
+	}
+
+	if topicName, ok := spliter.Actions["unmatched"]; ok {
+		writerConfig := templateWriterConfig
+		writerConfig.Topic = topicName
+		writerConfig.Dialer = dialer
+		writerConfig.ErrorLogger = loggerBasic
+
+		// logger.Debug(
+		// 	"Output unmatch topic",
+		// 	zap.String("Unmatch", topicName),
+		// )
+
+		unmatchedWriterConfig := &kafka.WriterConfig{}
+		copier.Copy(unmatchedWriterConfig, &writerConfig)
+
+		if debug := os.Getenv("DEBUG"); debug == "true" {
+			unmatchedWriterConfig.Logger = loggerBasic
+		}
+		unmatchedWriter = kafka.NewWriter(*unmatchedWriterConfig)
 	}
 
 	for {
 		m := <-inputMsgChan
-
-		matched := false
-
-		if useRegex {
-			// logger.Debug(
-			// 	"Using regex: ",
-			// 	zap.String("regex", pattern),
-			// )
-			matched = regex.Match(m.Value)
-		} else {
-			// logger.Debug(
-			// 	"Using substring: ",
-			// 	zap.String("regex", pattern),
-			// )
-			matched = strings.Contains(string(m.Value), pattern)
-		}
 
 		newMsg := kafka.Message{
 			Key:   m.Key,
 			Value: m.Value,
 		}
 
-		flagged := FlaggedMessage{
-			KafkaMessage: m,
-			Matched:      matched,
-		}
+		matched := false
+		numUnmatched := 0
 
-		if matched == true {
-			// logger.Debug(
-			// 	"Message matched",
-			// 	zap.String("Matched", string(newMsg.Value)),
-			// )
-			// logger.Debug(
-			// 	"Source topic:",
-			// 	zap.String("Topic", split.InputTopic),
-			// )
-			// logger.Debug(
-			// 	"Output topic:",
-			// 	zap.String("Topic", split.OutputTopic),
-			// )
+		for index, split := range spliter.Splits {
 
-			err := w.WriteMessages(context.Background(),
-				newMsg,
-			)
-
-			if err != nil {
-				errChannel <- Error{fmt.Sprintf("%s", err)}
-			}
-		}
-
-		unmatched <- flagged
-	}
-}
-
-func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, spliter Spliter, errChannel chan error) {
-	w := kafka.NewWriter(*writerConfig)
-	defer w.Close()
-
-	numSplits := len(spliter.Splits)
-	candidatesAll := make(map[string][]bool)
-	var buffer bytes.Buffer
-
-	for {
-		m := <-unmatched
-
-		buffer.WriteString(strconv.Itoa(int(m.KafkaMessage.Offset)))
-		buffer.WriteString("-")
-		buffer.WriteString(strconv.Itoa(int(m.KafkaMessage.Partition)))
-		msgName := buffer.String()
-		buffer.Reset()
-
-		// logger.Debug(
-		// 	"Dumping all unmatched before clean:",
-		// 	zap.Any("Unmatched", candidatesUnmatched),
-		// )
-
-		candidatesAll[msgName] = append(candidatesAll[msgName], m.Matched)
-
-		// logger.Debug(
-		// 	"Number of splits:",
-		// 	zap.Any("Splits", len(spliter.Splits)),
-		// )
-		//
-		// logger.Debug(
-		// 	"Number of not matchet already:",
-		// 	zap.Int("Splits", len(candidatesAll[msgName])),
-		// )
-
-		if numSplits == len(candidatesAll[msgName]) {
-			nonMatched := 0
-
-			for _, matching := range candidatesAll[msgName] {
-				if matching == false {
-					nonMatched++
-				}
+			if split.Extractor.UseRegex {
+				// logger.Debug(
+				// 	"Using regex: ",
+				// 	zap.String("regex", split.Extractor.Pattern),
+				// )
+				matched = regexes[index].Match(m.Value)
+			} else {
+				// logger.Debug(
+				// 	"Using substring: ",
+				// 	zap.String("regex", split.Extractor.Pattern),
+				// )
+				matched = strings.Contains(string(m.Value), split.Extractor.Pattern)
 			}
 
-			if numSplits == nonMatched {
-				// logger.Debug("Writing unmatched")
-				newMsg := kafka.Message{
-					Key:   m.KafkaMessage.Key,
-					Value: m.KafkaMessage.Value,
+			if matched == true {
+				// logger.Debug(
+				// 	"Message matched",
+				// 	zap.String("Matched", string(newMsg.Value)),
+				// )
+				// logger.Debug(
+				// 	"Source topic:",
+				// 	zap.String("Topic", split.InputTopic),
+				// )
+				// logger.Debug(
+				// 	"Output topic:",
+				// 	zap.String("Topic", split.OutputTopic),
+				// )
+
+				err := writers[index].WriteMessages(context.Background(),
+					newMsg,
+				)
+
+				if err != nil {
+					errChannel <- Error{fmt.Sprintf("%s", err)}
 				}
 
-				err := w.WriteMessages(context.Background(),
+				break
+			}
+
+			numUnmatched++
+
+			if numUnmatched == len(spliter.Splits) && unmatchedWriter != nil {
+				err := unmatchedWriter.WriteMessages(context.Background(),
 					newMsg,
 				)
 
@@ -545,13 +486,6 @@ func unmatched(unmatched chan FlaggedMessage, writerConfig *kafka.WriterConfig, 
 					errChannel <- Error{fmt.Sprintf("%s", err)}
 				}
 			}
-
-			delete(candidatesAll, msgName)
 		}
-
-		// logger.Debug(
-		// 	"Dumping all unmatched after clean:",
-		// 	zap.Any("Unmatched", candidatesUnmatched),
-		// )
 	}
 }
