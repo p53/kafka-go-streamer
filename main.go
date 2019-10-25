@@ -370,25 +370,38 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			if split.Action == "" {
 				split.OutputTopic = spliter.Actions["matched"]
 			} else {
-				split.OutputTopic = spliter.Actions[split.Action]
+				// if split refers to action in actions field of spliter
+				// use that topic, if split refers to action which is not in actions
+				// field of spliter, append just nil, later we will look if there is writer
+				// or nil and if nil, we skip writing (this is heritage from old streamer...)
+				if val, ok := spliter.Actions[split.Action]; ok {
+					split.OutputTopic = val
+				} else {
+					split.OutputTopic = ""
+					writers = append(writers, nil)
+				}
 			}
 		}
 
-		writerConfig := templateWriterConfig
-		writerConfig.Topic = split.OutputTopic
-		writerConfig.Dialer = dialer
-		writerConfig.ErrorLogger = loggerBasic
+		if split.OutputTopic != "" {
+			writerConfig := templateWriterConfig
+			writerConfig.Topic = split.OutputTopic
+			writerConfig.Dialer = dialer
+			writerConfig.ErrorLogger = loggerBasic
 
-		writerKafkaConfig := &kafka.WriterConfig{}
+			writerKafkaConfig := &kafka.WriterConfig{}
 
-		copier.Copy(writerKafkaConfig, &writerConfig)
+			copier.Copy(writerKafkaConfig, &writerConfig)
 
-		if debug := os.Getenv("DEBUG"); debug == "true" {
-			writerKafkaConfig.Logger = loggerBasic
+			if debug := os.Getenv("DEBUG"); debug == "true" {
+				writerKafkaConfig.Logger = loggerBasic
+			}
+
+			w := kafka.NewWriter(*writerKafkaConfig)
+			defer w.Close()
+			writers = append(writers, w)
 		}
 
-		w := kafka.NewWriter(*writerKafkaConfig)
-		defer w.Close()
 		var reg *regexp.Regexp
 
 		if split.Extractor.UseRegex {
@@ -399,7 +412,6 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			}
 		}
 
-		writers = append(writers, w)
 		regexes = append(regexes, reg)
 	}
 
@@ -463,13 +475,14 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				// 	"Output topic:",
 				// 	zap.String("Topic", split.OutputTopic),
 				// )
+				if writers[index] != nil {
+					err := writers[index].WriteMessages(context.Background(),
+						newMsg,
+					)
 
-				err := writers[index].WriteMessages(context.Background(),
-					newMsg,
-				)
-
-				if err != nil {
-					errChannel <- Error{fmt.Sprintf("%s", err)}
+					if err != nil {
+						errChannel <- Error{fmt.Sprintf("%s", err)}
+					}
 				}
 
 				break
