@@ -20,6 +20,10 @@ import (
 	"github.com/jinzhu/copier"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/segmentio/kafka-go"
+	_ "github.com/segmentio/kafka-go/gzip"
+	_ "github.com/segmentio/kafka-go/lz4"
+	_ "github.com/segmentio/kafka-go/snappy"
+	_ "github.com/segmentio/kafka-go/zstd"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
 )
