@@ -293,10 +293,10 @@ func main() {
 		)
 	}
 
-	// logger.Debug(
-	// 	"Spliters: ",
-	// 	zap.Any("Spliters: ", spliters),
-	// )
+	logger.Debug(
+		"Spliters: ",
+		zap.Any("Spliters: ", spliters),
+	)
 
 	done := make(chan bool)
 	errChannel := make(chan error)
@@ -351,10 +351,6 @@ func consume(readerKafkaConfig *kafka.ReaderConfig, writeChannel chan *kafka.Mes
 }
 
 func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dialer, spliter Spliter, errChannel chan error) {
-	// logger.Debug(
-	// 	"Starting producer thread for",
-	// 	zap.String("pattern", split.Extractor.Pattern),
-	// )
 	loggerBasic := GetLogger()
 	writers := make([]*kafka.Writer, 0)
 	regexes := make([]*regexp.Regexp, 0)
@@ -425,10 +421,10 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 		writerConfig.Dialer = dialer
 		writerConfig.ErrorLogger = loggerBasic
 
-		// logger.Debug(
-		// 	"Output unmatch topic",
-		// 	zap.String("Unmatch", topicName),
-		// )
+		logger.Debug(
+			"Output unmatch topic",
+			zap.String("Unmatch", topicName),
+		)
 
 		unmatchedWriterConfig := &kafka.WriterConfig{}
 		copier.Copy(unmatchedWriterConfig, &writerConfig)
@@ -453,32 +449,32 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 		for index, split := range spliter.Splits {
 
 			if split.Extractor.UseRegex {
-				// logger.Debug(
-				// 	"Using regex: ",
-				// 	zap.String("regex", split.Extractor.Pattern),
-				// )
+				logger.Debug(
+					"Using regex: ",
+					zap.String("regex", split.Extractor.Pattern),
+				)
 				matched = regexes[index].Match(m.Value)
 			} else {
-				// logger.Debug(
-				// 	"Using substring: ",
-				// 	zap.String("regex", split.Extractor.Pattern),
-				// )
+				logger.Debug(
+					"Using substring: ",
+					zap.String("regex", split.Extractor.Pattern),
+				)
 				matched = strings.Contains(string(m.Value), split.Extractor.Pattern)
 			}
 
 			if matched == true {
-				// logger.Debug(
-				// 	"Message matched",
-				// 	zap.String("Matched", string(newMsg.Value)),
-				// )
-				// logger.Debug(
-				// 	"Source topic:",
-				// 	zap.String("Topic", split.InputTopic),
-				// )
-				// logger.Debug(
-				// 	"Output topic:",
-				// 	zap.String("Topic", split.OutputTopic),
-				// )
+				logger.Debug(
+					"Message matched",
+					zap.String("Matched", string(newMsg.Value)),
+				)
+				logger.Debug(
+					"Source topic:",
+					zap.String("Topic", split.InputTopic),
+				)
+				logger.Debug(
+					"Output topic:",
+					zap.String("Topic", split.OutputTopic),
+				)
 				if writers[index] != nil {
 					err := writers[index].WriteMessages(context.Background(),
 						newMsg,
