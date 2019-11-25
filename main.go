@@ -435,6 +435,14 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 		unmatchedWriter = kafka.NewWriter(*unmatchedWriterConfig)
 	}
 
+	batchSize := templateWriterConfig.BatchSize
+
+	if batchSize == 0 {
+		batchSize = 100
+	}
+
+	batch := make([]kafka.Message, batchSize)
+
 	for {
 		m := <-inputMsgChan
 
@@ -476,12 +484,18 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 					zap.String("Topic", split.OutputTopic),
 				)
 				if writers[index] != nil {
-					err := writers[index].WriteMessages(context.Background(),
-						newMsg,
-					)
+					if len(batch) < batchSize {
+						batch = append(batch, newMsg)
+					}
 
-					if err != nil {
-						errChannel <- Error{fmt.Sprintf("%s", err)}
+					if len(batch) == batchSize {
+						err := writers[index].WriteMessages(context.Background(),
+							batch...,
+						)
+
+						if err != nil {
+							errChannel <- Error{fmt.Sprintf("%s", err)}
+						}
 					}
 				}
 
