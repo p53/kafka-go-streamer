@@ -113,7 +113,7 @@ func TestMessageRouting(t *testing.T) {
 				Value: []byte(testMsg.Message),
 			}
 
-			logger.Printf("%s", testMsg.Message)
+			logger.Printf("%v", newMsg)
 
 			err = w.WriteMessages(context.Background(),
 				newMsg,
@@ -125,10 +125,24 @@ func TestMessageRouting(t *testing.T) {
 
 			r := kafka.NewReader(*readerKafkaConfig)
 			defer r.Close()
-			m, err := r.FetchMessage(context.Background())
 
-			if err != nil {
-				logger.Fatalf("%s", err)
+			var m kafka.Message
+
+			for index := 0; index < 10; index++ {
+				logger.Print("Fetching")
+				m, err = r.ReadMessage(context.Background())
+				logger.Printf("Read message %s", m.Value)
+
+				if err != nil {
+					logger.Fatalf("%s", err)
+				}
+
+				if string(m.Value) != testMsg.Message {
+					logger.Printf("Message: %s is not in expected topic: %s! %s aaa", testMsg.Message, testMsg.ExpectedTopic, m.Value)
+					time.Sleep(3 * time.Second)
+				} else {
+					break
+				}
 			}
 
 			if string(m.Value) != testMsg.Message {

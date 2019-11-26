@@ -441,7 +441,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 		batchSize = 100
 	}
 
-	batch := make([]kafka.Message, batchSize)
+	batch := []kafka.Message{}
 
 	for {
 		m := <-inputMsgChan
@@ -484,18 +484,22 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 					zap.String("Topic", split.OutputTopic),
 				)
 				if writers[index] != nil {
+					loggerBasic.Printf("HHHH %d GGG %d", len(batch), batchSize)
 					if len(batch) < batchSize {
+						loggerBasic.Printf("TTT %d", batchSize)
 						batch = append(batch, newMsg)
 					}
 
 					if len(batch) == batchSize {
-						err := writers[index].WriteMessages(context.Background(),
-							batch...,
-						)
+						loggerBasic.Printf("%v", batch)
+						loggerBasic.Printf("%v", batch[0])
+						loggerBasic.Printf("%s", string(batch[0].Value))
+						err := writers[index].WriteMessages(context.Background(), batch...)
 
 						if err != nil {
 							errChannel <- Error{fmt.Sprintf("%s", err)}
 						}
+						batch = []kafka.Message{}
 					}
 				}
 
