@@ -500,7 +500,9 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						mustFlush = true
 						batchTimerRunning = false
 					default:
-						mustFlush = true
+						if len(batch) == batchSize {
+							mustFlush = true
+						}
 					}
 
 					if mustFlush {
