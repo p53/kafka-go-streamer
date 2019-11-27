@@ -442,6 +442,11 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 	}
 
 	batch := []kafka.Message{}
+	batchTimer := time.NewTimer(0)
+	<-batchTimer.C
+	batchTimer.Reset(templateWriterConfig.BatchTimeout)
+	defer batchTimer.Stop()
+	batchTimerRunning := true
 
 	for {
 		m := <-inputMsgChan
@@ -488,13 +493,34 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						batch = append(batch, newMsg)
 					}
 
-					if len(batch) == batchSize {
+					mustFlush := false
+
+					select {
+					case <-batchTimer.C:
+						mustFlush = true
+						batchTimerRunning = false
+					default:
+						mustFlush = true
+					}
+
+					if mustFlush {
 						err := writers[index].WriteMessages(context.Background(), batch...)
 
 						if err != nil {
 							errChannel <- Error{fmt.Sprintf("%s", err)}
 						}
 						batch = []kafka.Message{}
+
+						if !batchTimerRunning {
+							batchTimer.Reset(templateWriterConfig.BatchTimeout)
+							batchTimerRunning = true
+						} else {
+							if stopped := batchTimer.Stop(); !stopped {
+								<-batchTimer.C
+							}
+							batchTimer.Reset(templateWriterConfig.BatchTimeout)
+							batchTimerRunning = true
+						}
 					}
 				}
 
