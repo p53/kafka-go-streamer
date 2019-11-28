@@ -354,6 +354,8 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 	loggerBasic := GetLogger()
 	writers := make([]*kafka.Writer, 0)
 	regexes := make([]*regexp.Regexp, 0)
+	batches := make([][]kafka.Message, 0)
+	batchTimers := make([]*time.Timer, 0)
 	var unmatchedWriter *kafka.Writer
 
 	templateWriterConfig := WriterConfig{}
@@ -379,6 +381,8 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				} else {
 					split.OutputTopic = ""
 					writers = append(writers, nil)
+					batches = append(batches, nil)
+					batchTimers = append(batchTimers, nil)
 				}
 			}
 		}
@@ -398,8 +402,15 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			}
 
 			w := kafka.NewWriter(*writerKafkaConfig)
+			batch := []kafka.Message{}
+			batchTimer := time.NewTimer(0)
+			<-batchTimer.C
+			batchTimer.Reset(templateWriterConfig.BatchTimeout)
+			defer batchTimer.Stop()
 			defer w.Close()
 			writers = append(writers, w)
+			batches = append(batches, batch)
+			batchTimers = append(batchTimers, batchTimer)
 		}
 
 		var reg *regexp.Regexp
@@ -440,13 +451,6 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 	if batchSize == 0 {
 		batchSize = 100
 	}
-
-	batch := []kafka.Message{}
-	batchTimer := time.NewTimer(0)
-	<-batchTimer.C
-	batchTimer.Reset(templateWriterConfig.BatchTimeout)
-	defer batchTimer.Stop()
-	batchTimerRunning := true
 
 	for {
 		m := <-inputMsgChan
@@ -489,39 +493,38 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 					zap.String("Topic", split.OutputTopic),
 				)
 				if writers[index] != nil {
-					if len(batch) < batchSize {
-						batch = append(batch, newMsg)
+					if len(batches[index]) < batchSize {
+						batches[index] = append(batches[index], newMsg)
 					}
 
 					mustFlush := false
+					batchTimerRunning := true
 
 					select {
-					case <-batchTimer.C:
+					case <-batchTimers[index].C:
 						mustFlush = true
 						batchTimerRunning = false
 					default:
-						if len(batch) == batchSize {
+						if len(batches[index]) == batchSize {
 							mustFlush = true
 						}
 					}
 
 					if mustFlush {
-						err := writers[index].WriteMessages(context.Background(), batch...)
+						err := writers[index].WriteMessages(context.Background(), batches[index]...)
 
 						if err != nil {
 							errChannel <- Error{fmt.Sprintf("%s", err)}
 						}
-						batch = []kafka.Message{}
+						batches[index] = []kafka.Message{}
 
 						if !batchTimerRunning {
-							batchTimer.Reset(templateWriterConfig.BatchTimeout)
-							batchTimerRunning = true
+							batchTimers[index].Reset(templateWriterConfig.BatchTimeout)
 						} else {
-							if stopped := batchTimer.Stop(); !stopped {
-								<-batchTimer.C
+							if stopped := batchTimers[index].Stop(); !stopped {
+								<-batchTimers[index].C
 							}
-							batchTimer.Reset(templateWriterConfig.BatchTimeout)
-							batchTimerRunning = true
+							batchTimers[index].Reset(templateWriterConfig.BatchTimeout)
 						}
 					}
 				}
