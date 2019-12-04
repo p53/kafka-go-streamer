@@ -168,8 +168,8 @@ func main() {
 
 	certificates := make([]tls.Certificate, 1)
 	dialer := &kafka.Dialer{
-		Timeout:   180 * time.Second,
-		KeepAlive: 300 * time.Second,
+		Timeout:   60 * time.Second,
+		KeepAlive: 30 * time.Second,
 	}
 
 	splitConf := os.Getenv("SPLIT_CONF")
@@ -377,8 +377,16 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				// field of spliter, append just nil, later we will look if there is writer
 				// or nil and if nil, we skip writing (this is heritage from old streamer...)
 				if val, ok := spliter.Actions[split.Action]; ok {
+					logger.Debug(
+						"Setting output from action",
+						zap.String("Action %s, out topic: %s", split.Action, val),
+					)
 					split.OutputTopic = val
 				} else {
+					logger.Debug(
+						"Seems no action value??",
+						zap.String("Action %s", split.Action),
+					)
 					split.OutputTopic = ""
 					writers = append(writers, nil)
 					batches = append(batches, nil)
@@ -474,7 +482,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			} else {
 				logger.Debug(
 					"Using substring: ",
-					zap.String("regex", split.Extractor.Pattern),
+					zap.String("substring", split.Extractor.Pattern),
 				)
 				matched = strings.Contains(string(m.Value), split.Extractor.Pattern)
 			}
@@ -486,7 +494,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				)
 				logger.Debug(
 					"Source topic:",
-					zap.String("Topic", split.InputTopic),
+					zap.String("Topic", spliter.InputTopic),
 				)
 				logger.Debug(
 					"Output topic:",
