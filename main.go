@@ -418,7 +418,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			batch := []kafka.Message{}
 			batchTimer := time.NewTimer(0)
 			<-batchTimer.C
-			batchTimer.Reset(100 * time.Millisecond)
+			batchTimer.Reset(5 * time.Second)
 			defer batchTimer.Stop()
 			defer w.Close()
 			writers = append(writers, w)
@@ -547,7 +547,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 							if stopped := batchTimers[index].Stop(); !stopped {
 								<-batchTimers[index].C
 							}
-							batchTimers[index].Reset(100 * time.Millisecond)
+							batchTimers[index].Reset(5 * time.Second)
 						}
 					}
 				}
