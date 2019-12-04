@@ -518,14 +518,14 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						mustFlush = true
 						batchTimerRunning = false
 						logger.Debug(
-							"Running timer"
+							"Running timer",
 						)
 					default:
 						if len(batches[index]) == batchSize {
 							mustFlush = true
 							logger.Debug(
 								"Running batch",
-								zap.Int("Size of batch", batchSize)
+								zap.Int("Size of batch", batchSize),
 							)
 						}
 					}
@@ -534,7 +534,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						err := writers[index].WriteMessages(context.Background(), batches[index]...)
 						logger.Debug(
 							"Flushing",
-							zap.Int("Size of Flushed batch", batchSize)
+							zap.Int("Size of Flushed batch", batchSize),
 						)
 						if err != nil {
 							errChannel <- Error{fmt.Sprintf("%s", err)}
