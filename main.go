@@ -379,13 +379,14 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				if val, ok := spliter.Actions[split.Action]; ok {
 					logger.Debug(
 						"Setting output from action",
-						zap.String("Action %s, out topic: %s", split.Action, val),
+						zap.String("Action:", split.Action),
+						zap.String("out topic:", val),
 					)
 					split.OutputTopic = val
 				} else {
 					logger.Debug(
 						"Seems no action value??",
-						zap.String("Action %s", split.Action),
+						zap.String("Action:", split.Action),
 					)
 					split.OutputTopic = ""
 					writers = append(writers, nil)
