@@ -521,6 +521,9 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 							"Running timer",
 						)
 					default:
+						logger.Debug(
+							"Default select",
+						)
 						if len(batches[index]) == batchSize {
 							mustFlush = true
 							logger.Debug(
@@ -542,7 +545,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						batches[index] = []kafka.Message{}
 
 						if !batchTimerRunning {
-							batchTimers[index].Reset(templateWriterConfig.BatchTimeout)
+							batchTimers[index].Reset(5 * time.Second)
 						} else {
 							if stopped := batchTimers[index].Stop(); !stopped {
 								<-batchTimers[index].C
