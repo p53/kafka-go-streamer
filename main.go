@@ -418,7 +418,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			batch := []kafka.Message{}
 			batchTimer := time.NewTimer(0)
 			<-batchTimer.C
-			batchTimer.Reset(10 * time.Second)
+			batchTimer.Reset(60 * time.Second)
 			defer batchTimer.Stop()
 			defer w.Close()
 			writers = append(writers, w)
@@ -538,6 +538,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						logger.Debug(
 							"Flushing",
 							zap.Int("Size of Flushed batch", len(batches[index])),
+							zap.String("Flushed input topic", spliter.InputTopic),
 						)
 						if err != nil {
 							errChannel <- Error{fmt.Sprintf("%s", err)}
@@ -545,12 +546,12 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						batches[index] = []kafka.Message{}
 
 						if !batchTimerRunning {
-							batchTimers[index].Reset(10 * time.Second)
+							batchTimers[index].Reset(60 * time.Second)
 						} else {
 							if stopped := batchTimers[index].Stop(); !stopped {
 								<-batchTimers[index].C
 							}
-							batchTimers[index].Reset(10 * time.Second)
+							batchTimers[index].Reset(60 * time.Second)
 						}
 					}
 				}
