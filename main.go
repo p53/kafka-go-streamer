@@ -370,6 +370,10 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 
 		if split.OutputTopic == "" {
 			if split.Action == "" {
+				logger.Debug(
+					"Empty action, setting from matched topic",
+					zap.String("Action:", spliter.Actions["matched"]),
+				)
 				split.OutputTopic = spliter.Actions["matched"]
 			} else {
 				// if split refers to action in actions field of spliter
@@ -513,15 +517,25 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 					case <-batchTimers[index].C:
 						mustFlush = true
 						batchTimerRunning = false
+						logger.Debug(
+							"Running timer"
+						)
 					default:
 						if len(batches[index]) == batchSize {
 							mustFlush = true
+							logger.Debug(
+								"Running batch",
+								zap.Int("Size of batch", batchSize)
+							)
 						}
 					}
 
 					if mustFlush {
 						err := writers[index].WriteMessages(context.Background(), batches[index]...)
-
+						logger.Debug(
+							"Flushing",
+							zap.Int("Size of Flushed batch", batchSize)
+						)
 						if err != nil {
 							errChannel <- Error{fmt.Sprintf("%s", err)}
 						}
