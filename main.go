@@ -168,7 +168,7 @@ func main() {
 
 	certificates := make([]tls.Certificate, 1)
 	dialer := &kafka.Dialer{
-		Timeout:   60 * time.Second,
+		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
 
@@ -355,7 +355,9 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 	writers := make([]*kafka.Writer, 0)
 	regexes := make([]*regexp.Regexp, 0)
 	batches := make([][]kafka.Message, 0)
+	batchUnmatch := []kafka.Message{}
 	batchTimers := make([]*time.Timer, 0)
+	batchUnmatchTimer := time.NewTimer(0)
 	var unmatchedWriter *kafka.Writer
 
 	templateWriterConfig := WriterConfig{}
@@ -418,7 +420,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			batch := []kafka.Message{}
 			batchTimer := time.NewTimer(0)
 			<-batchTimer.C
-			batchTimer.Reset(60 * time.Second)
+			batchTimer.Reset(10 * time.Second)
 			defer batchTimer.Stop()
 			defer w.Close()
 			writers = append(writers, w)
@@ -457,6 +459,10 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			unmatchedWriterConfig.Logger = loggerBasic
 		}
 		unmatchedWriter = kafka.NewWriter(*unmatchedWriterConfig)
+
+		<-batchUnmatchTimer.C
+		batchUnmatchTimer.Reset(10 * time.Second)
+		defer batchUnmatchTimer.Stop()
 	}
 
 	batchSize := templateWriterConfig.BatchSize
@@ -546,12 +552,12 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						batches[index] = []kafka.Message{}
 
 						if !batchTimerRunning {
-							batchTimers[index].Reset(60 * time.Second)
+							batchTimers[index].Reset(10 * time.Second)
 						} else {
 							if stopped := batchTimers[index].Stop(); !stopped {
 								<-batchTimers[index].C
 							}
-							batchTimers[index].Reset(60 * time.Second)
+							batchTimers[index].Reset(10 * time.Second)
 						}
 					}
 				}
@@ -562,12 +568,53 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			numUnmatched++
 
 			if numUnmatched == len(spliter.Splits) && unmatchedWriter != nil {
-				err := unmatchedWriter.WriteMessages(context.Background(),
-					newMsg,
-				)
+				if len(batchUnmatch) < batchSize {
+					batchUnmatch = append(batchUnmatch, newMsg)
+				}
 
-				if err != nil {
-					errChannel <- Error{fmt.Sprintf("%s", err)}
+				mustFlush := false
+				batchTimerRunning := true
+
+				select {
+				case <-batchUnmatchTimer.C:
+					mustFlush = true
+					batchTimerRunning = false
+					logger.Debug(
+						"Running timer unmatch",
+					)
+				default:
+					logger.Debug(
+						"Default select unmatch",
+					)
+					if len(batchUnmatch) == batchSize {
+						mustFlush = true
+						logger.Debug(
+							"Running batch unmatch",
+							zap.Int("Size of batch unmatch", batchSize),
+						)
+					}
+				}
+
+				if mustFlush {
+					err := unmatchedWriter.WriteMessages(context.Background(), batchUnmatch...)
+					logger.Debug(
+						"Flushing",
+						zap.Int("Size of Flushed unmatch batch", len(batchUnmatch)),
+						zap.String("Flushed unmatch input topic", spliter.InputTopic),
+					)
+					if err != nil {
+						errChannel <- Error{fmt.Sprintf("%s", err)}
+					}
+					batchUnmatch = []kafka.Message{}
+
+					if !batchTimerRunning {
+						batchUnmatchTimer.Reset(10 * time.Second)
+					} else {
+						if stopped := batchUnmatchTimer.Stop(); !stopped {
+							<-batchUnmatchTimer.C
+						}
+						batchUnmatchTimer.Reset(10 * time.Second)
+					}
 				}
 			}
 		}
