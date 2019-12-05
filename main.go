@@ -168,8 +168,8 @@ func main() {
 
 	certificates := make([]tls.Certificate, 1)
 	dialer := &kafka.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
+		Timeout:   30 * time.Second,
+		KeepAlive: 60 * time.Second,
 	}
 
 	splitConf := os.Getenv("SPLIT_CONF")
