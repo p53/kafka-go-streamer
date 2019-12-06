@@ -367,7 +367,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 		logger.Fatal(err.Error())
 	}
 
-	for _, split := range spliter.Splits {
+	for index, split := range spliter.Splits {
 		split.InputTopic = spliter.InputTopic
 
 		if split.OutputTopic == "" {
@@ -376,7 +376,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 					"Empty action, setting from matched topic",
 					zap.String("Action:", spliter.Actions["matched"]),
 				)
-				split.OutputTopic = spliter.Actions["matched"]
+				spliter.Splits[index].OutputTopic = spliter.Actions["matched"]
 			} else {
 				// if split refers to action in actions field of spliter
 				// use that topic, if split refers to action which is not in actions
@@ -388,13 +388,13 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						zap.String("Action:", split.Action),
 						zap.String("out topic:", val),
 					)
-					split.OutputTopic = val
+					spliter.Splits[index].OutputTopic = val
 				} else {
-					logger.Debug(
-						"Seems no action value??",
-						zap.String("Action:", split.Action),
+					logger.Warn(
+						"There is no action, output topic will be empty",
+						zap.String("Missing action in spliter", split.Action),
 					)
-					split.OutputTopic = ""
+					spliter.Splits[index].OutputTopic = ""
 					writers = append(writers, nil)
 					batches = append(batches, nil)
 					batchTimers = append(batchTimers, nil)
