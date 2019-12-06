@@ -402,9 +402,9 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			}
 		}
 
-		if split.OutputTopic != "" {
+		if spliter.Splits[index].OutputTopic != "" {
 			writerConfig := templateWriterConfig
-			writerConfig.Topic = split.OutputTopic
+			writerConfig.Topic = spliter.Splits[index].OutputTopic
 			writerConfig.Dialer = dialer
 			writerConfig.ErrorLogger = loggerBasic
 
