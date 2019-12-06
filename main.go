@@ -512,9 +512,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 					zap.String("Topic", split.OutputTopic),
 				)
 				if writers[index] != nil {
-					if len(batches[index]) < batchSize {
-						batches[index] = append(batches[index], newMsg)
-					}
+					batches[index] = append(batches[index], newMsg)
 
 					mustFlush := false
 					batchTimerRunning := true
@@ -568,9 +566,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			numUnmatched++
 
 			if numUnmatched == len(spliter.Splits) && unmatchedWriter != nil {
-				if len(batchUnmatch) < batchSize {
-					batchUnmatch = append(batchUnmatch, newMsg)
-				}
+				batchUnmatch = append(batchUnmatch, newMsg)
 
 				mustFlush := false
 				batchTimerRunning := true
