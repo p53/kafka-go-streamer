@@ -334,7 +334,7 @@ func consume(readerKafkaConfig *kafka.ReaderConfig, writeChannel chan *kafka.Mes
 	defer reader.Close()
 
 	for {
-		m, err := reader.FetchMessage(context.Background())
+		m, err := reader.ReadMessage(context.Background())
 
 		if err != nil {
 			errChannel <- Error{fmt.Sprintf("Error fetching message: %s", err)}
@@ -342,11 +342,11 @@ func consume(readerKafkaConfig *kafka.ReaderConfig, writeChannel chan *kafka.Mes
 
 		writeChannel <- &m
 
-		reader.CommitMessages(context.Background(), m)
-
-		if err != nil {
-			errChannel <- Error{fmt.Sprintf("Error commiting message: %s", err)}
-		}
+		// reader.CommitMessages(context.Background(), m)
+		//
+		// if err != nil {
+		// 	errChannel <- Error{fmt.Sprintf("Error commiting message: %s", err)}
+		// }
 	}
 }
 
