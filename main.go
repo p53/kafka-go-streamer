@@ -484,6 +484,51 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 
 		for index, split := range spliter.Splits {
 
+			mustFlush := false
+			batchTimerRunning := true
+
+			select {
+			case <-batchTimers[index].C:
+				mustFlush = true
+				batchTimerRunning = false
+				logger.Debug(
+					"Running timer",
+				)
+			default:
+				logger.Debug(
+					"Default select",
+				)
+				if len(batches[index]) == batchSize {
+					mustFlush = true
+					logger.Debug(
+						"Running batch",
+						zap.Int("Size of batch", batchSize),
+					)
+				}
+			}
+
+			if mustFlush {
+				err := writers[index].WriteMessages(context.Background(), batches[index]...)
+				logger.Debug(
+					"Flushing",
+					zap.Int("Size of Flushed batch", len(batches[index])),
+					zap.String("Flushed input topic", spliter.InputTopic),
+				)
+				if err != nil {
+					errChannel <- Error{fmt.Sprintf("%s", err)}
+				}
+				batches[index] = []kafka.Message{}
+
+				if !batchTimerRunning {
+					batchTimers[index].Reset(10 * time.Second)
+				} else {
+					if stopped := batchTimers[index].Stop(); !stopped {
+						<-batchTimers[index].C
+					}
+					batchTimers[index].Reset(10 * time.Second)
+				}
+			}
+
 			if split.Extractor.UseRegex {
 				logger.Debug(
 					"Using regex: ",
@@ -513,51 +558,6 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				)
 				if writers[index] != nil {
 					batches[index] = append(batches[index], newMsg)
-
-					mustFlush := false
-					batchTimerRunning := true
-
-					select {
-					case <-batchTimers[index].C:
-						mustFlush = true
-						batchTimerRunning = false
-						logger.Debug(
-							"Running timer",
-						)
-					default:
-						logger.Debug(
-							"Default select",
-						)
-						if len(batches[index]) == batchSize {
-							mustFlush = true
-							logger.Debug(
-								"Running batch",
-								zap.Int("Size of batch", batchSize),
-							)
-						}
-					}
-
-					if mustFlush {
-						err := writers[index].WriteMessages(context.Background(), batches[index]...)
-						logger.Debug(
-							"Flushing",
-							zap.Int("Size of Flushed batch", len(batches[index])),
-							zap.String("Flushed input topic", spliter.InputTopic),
-						)
-						if err != nil {
-							errChannel <- Error{fmt.Sprintf("%s", err)}
-						}
-						batches[index] = []kafka.Message{}
-
-						if !batchTimerRunning {
-							batchTimers[index].Reset(10 * time.Second)
-						} else {
-							if stopped := batchTimers[index].Stop(); !stopped {
-								<-batchTimers[index].C
-							}
-							batchTimers[index].Reset(10 * time.Second)
-						}
-					}
 				}
 
 				break
