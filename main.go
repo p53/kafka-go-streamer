@@ -484,6 +484,38 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 
 		for index, split := range spliter.Splits {
 
+			if split.Extractor.UseRegex {
+				logger.Debug(
+					"Using regex: ",
+					zap.String("regex", split.Extractor.Pattern),
+				)
+				matched = regexes[index].Match(m.Value)
+			} else {
+				logger.Debug(
+					"Using substring: ",
+					zap.String("substring", split.Extractor.Pattern),
+				)
+				matched = strings.Contains(string(m.Value), split.Extractor.Pattern)
+			}
+
+			if matched == true {
+				logger.Debug(
+					"Message matched",
+					zap.String("Matched", string(newMsg.Value)),
+				)
+				logger.Debug(
+					"Source topic:",
+					zap.String("Topic", spliter.InputTopic),
+				)
+				logger.Debug(
+					"Output topic:",
+					zap.String("Topic", split.OutputTopic),
+				)
+				if writers[index] != nil {
+					batches[index] = append(batches[index], newMsg)
+				}
+			}
+
 			mustFlush := false
 			batchTimerRunning := true
 
@@ -529,37 +561,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				}
 			}
 
-			if split.Extractor.UseRegex {
-				logger.Debug(
-					"Using regex: ",
-					zap.String("regex", split.Extractor.Pattern),
-				)
-				matched = regexes[index].Match(m.Value)
-			} else {
-				logger.Debug(
-					"Using substring: ",
-					zap.String("substring", split.Extractor.Pattern),
-				)
-				matched = strings.Contains(string(m.Value), split.Extractor.Pattern)
-			}
-
 			if matched == true {
-				logger.Debug(
-					"Message matched",
-					zap.String("Matched", string(newMsg.Value)),
-				)
-				logger.Debug(
-					"Source topic:",
-					zap.String("Topic", spliter.InputTopic),
-				)
-				logger.Debug(
-					"Output topic:",
-					zap.String("Topic", split.OutputTopic),
-				)
-				if writers[index] != nil {
-					batches[index] = append(batches[index], newMsg)
-				}
-
 				break
 			}
 
