@@ -516,48 +516,50 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				}
 			}
 
-			mustFlush := false
-			batchTimerRunning := true
+			if writers[index] != nil {
+				mustFlush := false
+				batchTimerRunning := true
 
-			select {
-			case <-batchTimers[index].C:
-				mustFlush = true
-				batchTimerRunning = false
-				logger.Debug(
-					"Running timer",
-				)
-			default:
-				logger.Debug(
-					"Default select",
-				)
-				if len(batches[index]) == batchSize {
+				select {
+				case <-batchTimers[index].C:
 					mustFlush = true
+					batchTimerRunning = false
 					logger.Debug(
-						"Running batch",
-						zap.Int("Size of batch", batchSize),
+						"Running timer",
 					)
-				}
-			}
-
-			if mustFlush {
-				err := writers[index].WriteMessages(context.Background(), batches[index]...)
-				logger.Debug(
-					"Flushing",
-					zap.Int("Size of Flushed batch", len(batches[index])),
-					zap.String("Flushed input topic", spliter.InputTopic),
-				)
-				if err != nil {
-					errChannel <- Error{fmt.Sprintf("%s", err)}
-				}
-				batches[index] = []kafka.Message{}
-
-				if !batchTimerRunning {
-					batchTimers[index].Reset(10 * time.Second)
-				} else {
-					if stopped := batchTimers[index].Stop(); !stopped {
-						<-batchTimers[index].C
+				default:
+					logger.Debug(
+						"Default select",
+					)
+					if len(batches[index]) == batchSize {
+						mustFlush = true
+						logger.Debug(
+							"Running batch",
+							zap.Int("Size of batch", batchSize),
+						)
 					}
-					batchTimers[index].Reset(10 * time.Second)
+				}
+
+				if mustFlush {
+					err := writers[index].WriteMessages(context.Background(), batches[index]...)
+					logger.Debug(
+						"Flushing",
+						zap.Int("Size of Flushed batch", len(batches[index])),
+						zap.String("Flushed input topic", spliter.InputTopic),
+					)
+					if err != nil {
+						errChannel <- Error{fmt.Sprintf("%s", err)}
+					}
+					batches[index] = []kafka.Message{}
+
+					if !batchTimerRunning {
+						batchTimers[index].Reset(10 * time.Second)
+					} else {
+						if stopped := batchTimers[index].Stop(); !stopped {
+							<-batchTimers[index].C
+						}
+						batchTimers[index].Reset(10 * time.Second)
+					}
 				}
 			}
 
