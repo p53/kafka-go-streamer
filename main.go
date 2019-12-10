@@ -168,8 +168,8 @@ func main() {
 
 	certificates := make([]tls.Certificate, 1)
 	dialer := &kafka.Dialer{
-		Timeout:   60 * time.Second,
-		KeepAlive: 30 * time.Second,
+		Timeout:   30 * time.Second,
+		KeepAlive: 60 * time.Second,
 	}
 
 	splitConf := os.Getenv("SPLIT_CONF")
@@ -334,7 +334,7 @@ func consume(readerKafkaConfig *kafka.ReaderConfig, writeChannel chan *kafka.Mes
 	defer reader.Close()
 
 	for {
-		m, err := reader.FetchMessage(context.Background())
+		m, err := reader.ReadMessage(context.Background())
 
 		if err != nil {
 			errChannel <- Error{fmt.Sprintf("Error fetching message: %s", err)}
@@ -342,11 +342,11 @@ func consume(readerKafkaConfig *kafka.ReaderConfig, writeChannel chan *kafka.Mes
 
 		writeChannel <- &m
 
-		reader.CommitMessages(context.Background(), m)
-
-		if err != nil {
-			errChannel <- Error{fmt.Sprintf("Error commiting message: %s", err)}
-		}
+		// reader.CommitMessages(context.Background(), m)
+		//
+		// if err != nil {
+		// 	errChannel <- Error{fmt.Sprintf("Error commiting message: %s", err)}
+		// }
 	}
 }
 
@@ -354,6 +354,10 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 	loggerBasic := GetLogger()
 	writers := make([]*kafka.Writer, 0)
 	regexes := make([]*regexp.Regexp, 0)
+	batches := make([][]kafka.Message, 0)
+	batchUnmatch := []kafka.Message{}
+	batchTimers := make([]*time.Timer, 0)
+	batchUnmatchTimer := time.NewTimer(0)
 	var unmatchedWriter *kafka.Writer
 
 	templateWriterConfig := WriterConfig{}
@@ -363,29 +367,44 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 		logger.Fatal(err.Error())
 	}
 
-	for _, split := range spliter.Splits {
+	for index, split := range spliter.Splits {
 		split.InputTopic = spliter.InputTopic
 
 		if split.OutputTopic == "" {
 			if split.Action == "" {
-				split.OutputTopic = spliter.Actions["matched"]
+				logger.Debug(
+					"Empty action, setting from matched topic",
+					zap.String("Action:", spliter.Actions["matched"]),
+				)
+				spliter.Splits[index].OutputTopic = spliter.Actions["matched"]
 			} else {
 				// if split refers to action in actions field of spliter
 				// use that topic, if split refers to action which is not in actions
 				// field of spliter, append just nil, later we will look if there is writer
 				// or nil and if nil, we skip writing (this is heritage from old streamer...)
 				if val, ok := spliter.Actions[split.Action]; ok {
-					split.OutputTopic = val
+					logger.Debug(
+						"Setting output from action",
+						zap.String("Action:", split.Action),
+						zap.String("out topic:", val),
+					)
+					spliter.Splits[index].OutputTopic = val
 				} else {
-					split.OutputTopic = ""
+					logger.Warn(
+						"There is no action, output topic will be empty",
+						zap.String("Missing action in spliter", split.Action),
+					)
+					spliter.Splits[index].OutputTopic = ""
 					writers = append(writers, nil)
+					batches = append(batches, nil)
+					batchTimers = append(batchTimers, nil)
 				}
 			}
 		}
 
-		if split.OutputTopic != "" {
+		if spliter.Splits[index].OutputTopic != "" {
 			writerConfig := templateWriterConfig
-			writerConfig.Topic = split.OutputTopic
+			writerConfig.Topic = spliter.Splits[index].OutputTopic
 			writerConfig.Dialer = dialer
 			writerConfig.ErrorLogger = loggerBasic
 
@@ -398,8 +417,15 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			}
 
 			w := kafka.NewWriter(*writerKafkaConfig)
+			batch := []kafka.Message{}
+			batchTimer := time.NewTimer(0)
+			<-batchTimer.C
+			batchTimer.Reset(10 * time.Second)
+			defer batchTimer.Stop()
 			defer w.Close()
 			writers = append(writers, w)
+			batches = append(batches, batch)
+			batchTimers = append(batchTimers, batchTimer)
 		}
 
 		var reg *regexp.Regexp
@@ -433,6 +459,10 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			unmatchedWriterConfig.Logger = loggerBasic
 		}
 		unmatchedWriter = kafka.NewWriter(*unmatchedWriterConfig)
+
+		<-batchUnmatchTimer.C
+		batchUnmatchTimer.Reset(10 * time.Second)
+		defer batchUnmatchTimer.Stop()
 	}
 
 	batchSize := templateWriterConfig.BatchSize
@@ -440,8 +470,6 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 	if batchSize == 0 {
 		batchSize = 100
 	}
-
-	batch := []kafka.Message{}
 
 	for {
 		m := <-inputMsgChan
@@ -465,7 +493,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 			} else {
 				logger.Debug(
 					"Using substring: ",
-					zap.String("regex", split.Extractor.Pattern),
+					zap.String("substring", split.Extractor.Pattern),
 				)
 				matched = strings.Contains(string(m.Value), split.Extractor.Pattern)
 			}
@@ -477,39 +505,114 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				)
 				logger.Debug(
 					"Source topic:",
-					zap.String("Topic", split.InputTopic),
+					zap.String("Topic", spliter.InputTopic),
 				)
 				logger.Debug(
 					"Output topic:",
 					zap.String("Topic", split.OutputTopic),
 				)
 				if writers[index] != nil {
-					if len(batch) < batchSize {
-						batch = append(batch, newMsg)
-					}
-
-					if len(batch) == batchSize {
-						err := writers[index].WriteMessages(context.Background(), batch...)
-
-						if err != nil {
-							errChannel <- Error{fmt.Sprintf("%s", err)}
-						}
-						batch = []kafka.Message{}
-					}
+					batches[index] = append(batches[index], newMsg)
 				}
+			}
 
+			mustFlush := false
+			batchTimerRunning := true
+
+			select {
+			case <-batchTimers[index].C:
+				mustFlush = true
+				batchTimerRunning = false
+				logger.Debug(
+					"Running timer",
+				)
+			default:
+				logger.Debug(
+					"Default select",
+				)
+				if len(batches[index]) == batchSize {
+					mustFlush = true
+					logger.Debug(
+						"Running batch",
+						zap.Int("Size of batch", batchSize),
+					)
+				}
+			}
+
+			if mustFlush {
+				err := writers[index].WriteMessages(context.Background(), batches[index]...)
+				logger.Debug(
+					"Flushing",
+					zap.Int("Size of Flushed batch", len(batches[index])),
+					zap.String("Flushed input topic", spliter.InputTopic),
+				)
+				if err != nil {
+					errChannel <- Error{fmt.Sprintf("%s", err)}
+				}
+				batches[index] = []kafka.Message{}
+
+				if !batchTimerRunning {
+					batchTimers[index].Reset(10 * time.Second)
+				} else {
+					if stopped := batchTimers[index].Stop(); !stopped {
+						<-batchTimers[index].C
+					}
+					batchTimers[index].Reset(10 * time.Second)
+				}
+			}
+
+			if matched == true {
 				break
 			}
 
 			numUnmatched++
 
 			if numUnmatched == len(spliter.Splits) && unmatchedWriter != nil {
-				err := unmatchedWriter.WriteMessages(context.Background(),
-					newMsg,
-				)
+				batchUnmatch = append(batchUnmatch, newMsg)
 
-				if err != nil {
-					errChannel <- Error{fmt.Sprintf("%s", err)}
+				mustFlush := false
+				batchTimerRunning := true
+
+				select {
+				case <-batchUnmatchTimer.C:
+					mustFlush = true
+					batchTimerRunning = false
+					logger.Debug(
+						"Running timer unmatch",
+					)
+				default:
+					logger.Debug(
+						"Default select unmatch",
+					)
+					if len(batchUnmatch) == batchSize {
+						mustFlush = true
+						logger.Debug(
+							"Running batch unmatch",
+							zap.Int("Size of batch unmatch", batchSize),
+						)
+					}
+				}
+
+				if mustFlush {
+					err := unmatchedWriter.WriteMessages(context.Background(), batchUnmatch...)
+					logger.Debug(
+						"Flushing",
+						zap.Int("Size of Flushed unmatch batch", len(batchUnmatch)),
+						zap.String("Flushed unmatch input topic", spliter.InputTopic),
+					)
+					if err != nil {
+						errChannel <- Error{fmt.Sprintf("%s", err)}
+					}
+					batchUnmatch = []kafka.Message{}
+
+					if !batchTimerRunning {
+						batchUnmatchTimer.Reset(10 * time.Second)
+					} else {
+						if stopped := batchUnmatchTimer.Stop(); !stopped {
+							<-batchUnmatchTimer.C
+						}
+						batchUnmatchTimer.Reset(10 * time.Second)
+					}
 				}
 			}
 		}

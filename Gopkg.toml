@@ -25,30 +25,26 @@
 #   unused-packages = true
 
 
-[prune]
-  go-tests = true
-  unused-packages = true
-
 [[constraint]]
-  name = "gopkg.in/yaml.v2"
-  version = "2.2.2"
-
-[[constraint]]
-  name = "github.com/segmentio/kafka-go"
-  version = "0.3.2"
-
-[[constraint]]
-  name = "github.com/pkg/errors"
-  version = "0.8.1"
+  branch = "master"
+  name = "github.com/jinzhu/copier"
 
 [[constraint]]
   name = "github.com/kelseyhightower/envconfig"
   version = "1.4.0"
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/jinzhu/copier"
+  name = "github.com/segmentio/kafka-go"
+  version = "0.3.4"
 
 [[constraint]]
   name = "go.uber.org/zap"
-  version = "1.10.0"
+  version = "1.13.0"
+
+[[constraint]]
+  name = "gopkg.in/yaml.v2"
+  version = "2.2.7"
+
+[prune]
+  go-tests = true
+  unused-packages = true
