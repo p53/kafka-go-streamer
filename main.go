@@ -504,14 +504,8 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				logger.Debug(
 					"Message matched",
 					zap.String("Matched", string(newMsg.Value)),
-				)
-				logger.Debug(
-					"Source topic:",
 					zap.String("Topic", spliter.InputTopic),
-				)
-				logger.Debug(
-					"Output topic:",
-					zap.String("Topic", spliter.Splits[index].OutputTopic),
+					zap.String("OutTopic", spliter.Splits[index].OutputTopic),
 				)
 
 				if writers[index] != nil {
