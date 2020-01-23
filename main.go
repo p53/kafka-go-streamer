@@ -509,10 +509,17 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				)
 				logger.Debug(
 					"Output topic:",
-					zap.String("Topic", split.OutputTopic),
+					zap.String("Topic", spliter.Splits[index].OutputTopic),
 				)
+
 				if writers[index] != nil {
 					batches[index] = append(batches[index], newMsg)
+				} else {
+					logger.Debug(
+						"Writer is nil, nothing pushed to batch",
+						zap.String("Input topic", spliter.InputTopic),
+						zap.Int("Split index: ", index),
+					)
 				}
 			}
 
@@ -526,6 +533,8 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 					batchTimerRunning = false
 					logger.Debug(
 						"Running timer",
+						zap.String("Input topic", spliter.InputTopic),
+						zap.Int("Split index: ", index),
 					)
 				default:
 					logger.Debug(
@@ -536,6 +545,8 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 						logger.Debug(
 							"Running batch",
 							zap.Int("Size of batch", batchSize),
+							zap.String("Input topic", spliter.InputTopic),
+							zap.Int("Split index: ", index),
 						)
 					}
 				}
