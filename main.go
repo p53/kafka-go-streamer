@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime"
 	"runtime/pprof"
 	"strings"
 	"syscall"
@@ -124,6 +125,7 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to this file")
 
 func main() {
+	runtime.GOMAXPROCS(4)
 	flag.Parse()
 	if *cpuprofile != "" || *memprofile != "" {
 		fmem, err := os.Create(*memprofile)
