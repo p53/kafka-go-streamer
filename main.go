@@ -584,8 +584,10 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				numUnmatched++
 			}
 
-			if numUnmatched == len(spliter.Splits) && unmatchedWriter != nil {
-				batchUnmatch = append(batchUnmatch, newMsg)
+			if unmatchedWriter != nil {
+				if numUnmatched == len(spliter.Splits) {
+					batchUnmatch = append(batchUnmatch, newMsg)
+				}
 
 				mustFlush := false
 				batchTimerRunning := true
