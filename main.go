@@ -476,7 +476,7 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 		var newMsg kafka.Message
 
 		select {
-		case m := <-inputMsgChan:
+		case m = <-inputMsgChan:
 			newMsg = kafka.Message{
 				Key:   m.Key,
 				Value: m.Value,
@@ -490,18 +490,20 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 
 		for index, split := range spliter.Splits {
 
-			if split.Extractor.UseRegex {
-				logger.Debug(
-					"Using regex: ",
-					zap.String("regex", split.Extractor.Pattern),
-				)
-				matched = regexes[index].Match(m.Value)
-			} else {
-				logger.Debug(
-					"Using substring: ",
-					zap.String("substring", split.Extractor.Pattern),
-				)
-				matched = strings.Contains(string(m.Value), split.Extractor.Pattern)
+			if m != nil {
+				if split.Extractor.UseRegex {
+					logger.Debug(
+						"Using regex: ",
+						zap.String("regex", split.Extractor.Pattern),
+					)
+					matched = regexes[index].Match(m.Value)
+				} else {
+					logger.Debug(
+						"Using substring: ",
+						zap.String("substring", split.Extractor.Pattern),
+					)
+					matched = strings.Contains(string(m.Value), split.Extractor.Pattern)
+				}
 			}
 
 			if matched == true {
