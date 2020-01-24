@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
-	"runtime"
 	"runtime/pprof"
 	"strings"
 	"syscall"
@@ -125,7 +124,6 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to this file")
 
 func main() {
-	runtime.GOMAXPROCS(4)
 	flag.Parse()
 	if *cpuprofile != "" || *memprofile != "" {
 		fmem, err := os.Create(*memprofile)
@@ -474,11 +472,17 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 	}
 
 	for {
-		m := <-inputMsgChan
+		var m *kafka.Message
+		var newMsg kafka.Message
 
-		newMsg := kafka.Message{
-			Key:   m.Key,
-			Value: m.Value,
+		select {
+		case m := <-inputMsgChan:
+			newMsg = kafka.Message{
+				Key:   m.Key,
+				Value: m.Value,
+			}
+		default:
+			time.Sleep(1 * time.Second)
 		}
 
 		matched := false
@@ -574,7 +578,9 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				break
 			}
 
-			numUnmatched++
+			if m != nil {
+				numUnmatched++
+			}
 
 			if numUnmatched == len(spliter.Splits) && unmatchedWriter != nil {
 				batchUnmatch = append(batchUnmatch, newMsg)
