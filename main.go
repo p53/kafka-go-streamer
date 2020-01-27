@@ -482,7 +482,6 @@ func produce(done chan bool, inputMsgChan chan *kafka.Message, dialer *kafka.Dia
 				Value: m.Value,
 			}
 		default:
-			time.Sleep(1 * time.Second)
 		}
 
 		matched := false
