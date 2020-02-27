@@ -58,7 +58,7 @@ type ReaderConfig struct {
 	RebalanceTimeout       time.Duration `envconfig:"reader_rebalance_timeout"`
 	JoinGroupBackoff       time.Duration `envconfig:"reader_join_group_backoff"`
 	RetentionTime          time.Duration `envconfig:"reader_retention_time"`
-	StartOffset            int64         `envconfig:"reader_start_offset" default:"-1"`
+	StartOffset            int64         `envconfig:"reader_start_offset" default:"-2"`
 	ReadBackoffMin         time.Duration `envconfig:"reader_read_backoff_min"`
 	ReadBackoffMax         time.Duration `envconfig:"reader_read_backoff_max"`
 	ErrorLogger            *log.Logger
