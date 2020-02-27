@@ -58,7 +58,7 @@ type ReaderConfig struct {
 	RebalanceTimeout       time.Duration `envconfig:"reader_rebalance_timeout"`
 	JoinGroupBackoff       time.Duration `envconfig:"reader_join_group_backoff"`
 	RetentionTime          time.Duration `envconfig:"reader_retention_time"`
-	StartOffset            int64         `envconfig:"reader_start_offset"`
+	StartOffset            int64         `envconfig:"reader_start_offset" default:"-1"`
 	ReadBackoffMin         time.Duration `envconfig:"reader_read_backoff_min"`
 	ReadBackoffMax         time.Duration `envconfig:"reader_read_backoff_max"`
 	ErrorLogger            *log.Logger
@@ -304,7 +304,12 @@ func main() {
 	for _, spliter := range spliters.Spliters {
 		readerConfig := templateReaderConfig
 		readerConfig.Topic = spliter.InputTopic
-		readerConfig.GroupID = fmt.Sprintf("%s-streamer-%s", groupPrefix, groupSuffix)
+		readerConfig.GroupID = fmt.Sprintf(
+			"%s-streamer-%s_%s",
+			groupPrefix,
+			groupSuffix,
+			spliter.InputTopic,
+		)
 		readerConfig.Dialer = dialer
 		readerConfig.ErrorLogger = loggerBasic
 		readerKafkaConfig := &kafka.ReaderConfig{}
