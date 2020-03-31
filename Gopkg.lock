@@ -53,13 +53,14 @@
   version = "2.4.0"
 
 [[projects]]
-  digest = "1:caeb92d52f720b6c29220e78c92ace2be0e4db5172424600fc5562d13bb8250f"
+  digest = "1:5752671e4b9207e1248a7b5531ac8cb20d1e5d56aeb650e8f61851d5f8c30777"
   name = "github.com/segmentio/kafka-go"
   packages = [
     ".",
     "gzip",
     "lz4",
     "sasl",
+    "sasl/plain",
     "snappy",
     "zstd",
   ]
@@ -192,6 +193,8 @@
     "github.com/segmentio/kafka-go",
     "github.com/segmentio/kafka-go/gzip",
     "github.com/segmentio/kafka-go/lz4",
+    "github.com/segmentio/kafka-go/sasl",
+    "github.com/segmentio/kafka-go/sasl/plain",
     "github.com/segmentio/kafka-go/snappy",
     "github.com/segmentio/kafka-go/zstd",
     "go.uber.org/zap",
