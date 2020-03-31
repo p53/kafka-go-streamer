@@ -22,6 +22,7 @@ import (
 	"github.com/segmentio/kafka-go"
 	_ "github.com/segmentio/kafka-go/gzip"
 	_ "github.com/segmentio/kafka-go/lz4"
+	"github.com/segmentio/kafka-go/sasl/plain"
 	_ "github.com/segmentio/kafka-go/snappy"
 	_ "github.com/segmentio/kafka-go/zstd"
 	"go.uber.org/zap"
@@ -181,6 +182,9 @@ func main() {
 	sslClientCertEncoded := os.Getenv("SSL_CLIENT_CERT")
 	sslTrustedCAEncoded := os.Getenv("SSL_TRUSTED_CA")
 	debug := os.Getenv("DEBUG")
+	useSasl := os.Getenv("SASL")
+	saslUser := os.Getenv("SASL_USER")
+	saslPass := os.Getenv("SASL_PASSWD")
 
 	if debug == "true" {
 		logger, _ = zap.NewDevelopment()
@@ -272,6 +276,13 @@ func main() {
 			RootCAs:            rootCertPool,
 			Certificates:       certificates,
 			InsecureSkipVerify: sslSkipVerify,
+		}
+	}
+
+	if useSasl == "true" {
+		dialer.SASLMechanism = plain.Mechanism{
+			Username: saslUser,
+			Password: saslPass,
 		}
 	}
 
