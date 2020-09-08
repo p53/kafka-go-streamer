@@ -1,7 +1,8 @@
-FROM golang:1.12-alpine3.9 as builder
+FROM golang:1.15-alpine as builder
 
 WORKDIR /go/src/gitlab.tools.in.pan-net.eu/security/kafka-go-streamer
 ENV GOPATH=/go
+ENV GO111MODULE=on
 
 RUN set -ex \
     && apk add --no-cache --virtual .build-deps \
@@ -11,12 +12,10 @@ RUN set -ex \
             make \
             libc-dev \
             musl-dev \
-            linux-headers \
-            curl
-RUN curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+            linux-headers
+
 COPY . /go/src/gitlab.tools.in.pan-net.eu/security/kafka-go-streamer
 
-RUN dep ensure
 RUN go build
 
 FROM gitlab.tools.in.pan-net.eu:4567/docker-images/pannet-alpine:v0.1.4-3.9
